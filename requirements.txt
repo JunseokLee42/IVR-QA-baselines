@@ -8,4 +8,8 @@ timm
 fairscale
 opencv-python
 decord
+tiktoken
+blobfile
+protobuf
+deepspeed # optional for distributed inference
 git+https://github.com/salaniz/pycocoevalcap

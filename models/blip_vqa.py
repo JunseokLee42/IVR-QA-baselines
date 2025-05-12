@@ -96,8 +96,9 @@ class BLIP_VQA(nn.Module):
                 model_kwargs = {"encoder_hidden_states": question_states, "encoder_attention_mask": question_atts}
 
                 ## temp
-                bos_ids = torch.full((B, 1), fill_value=self.tokenizer.bos_token_id, device=image.device)
-                #bos_ids = torch.full((image.size(0), 1), fill_value=self.tokenizer.bos_token_id, device=image.device)
+                # bos_ids = torch.full((B, 1), fill_value=self.tokenizer.bos_token_id, device=image.device)
+                bos_ids = torch.full((question_states.size(0), 1), fill_value=self.tokenizer.bos_token_id, device=image.device)
+                # bos_ids = torch.full((image.size(0), 1), fill_value=self.tokenizer.bos_token_id, device=image.device)
 
                 outputs = self.text_decoder.generate(input_ids=bos_ids,
                                                      max_length=10,

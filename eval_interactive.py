@@ -1,11 +1,12 @@
 import argparse
 import os
-import ruamel_yaml as yaml
+import yaml
 import numpy as np
 import random
 import json
 from pathlib import Path
 
+import deepspeed
 import torch
 import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
@@ -17,7 +18,6 @@ import utils
 from data.video_dataset import VideoDataset
 from interactive.vqa import vqa_retrieval, vqa_retrieval_auto
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-
 
 def main(args, config, config_vqa, config_cap=None):
     utils.init_distributed_mode(args)
@@ -47,7 +47,7 @@ def main(args, config, config_vqa, config_cap=None):
     )
     #### Model ####
     print("Creating model")
-    model = blip_retrieval(pretrained=config['pretrained'], image_size=config['image_size'], vit=config['vit'])
+    model = blip_retrieval(pretrained=config['pretrained'], image_size=config['image_size'], vit=config['vit']) # pretrained model
 
     model = model.to(device)
 
@@ -55,23 +55,27 @@ def main(args, config, config_vqa, config_cap=None):
                          vit=config_vqa['vit'], vit_grad_ckpt=config_vqa['vit_grad_ckpt'],
                          vit_ckpt_layer=config_vqa['vit_ckpt_layer'])
     model_vqa = model_vqa.to(device)
-
+    print("Model Loaded")
     model_cap, t0_tokenizer, t0_model = None, None, None
     if args.automatic:
+        print("Creating caption model")
         model_cap = blip_decoder(pretrained=config_cap['pretrained'], image_size=config_cap['image_size'],
                                  vit=config_cap['vit'], prompt=config_cap['prompt'])
         model_cap = model_cap.to(device)
-        t0_tokenizer = AutoTokenizer.from_pretrained("bigscience/T0pp", cache_dir="./t0_model")
-        t0_model = AutoModelForSeq2SeqLM.from_pretrained("bigscience/T0pp", cache_dir="./t0_model")
+        t0_tokenizer = AutoTokenizer.from_pretrained("bigscience/T0pp", cache_dir="../hg_models/models--bigscience--T0pp")
+        t0_model = AutoModelForSeq2SeqLM.from_pretrained("bigscience/T0pp", cache_dir="../hg_models/models--bigscience--T0pp")
 
     if args.automatic:
+        print('vqa retrieval with automatic captioning')
         eval_results = vqa_retrieval_auto(model_vqa, model, test_loader, config['k_test'], top_k=args.top_k, round=args.round,
                                           model_cap=model_cap, config_cap=config_cap, t0_tokenizer=t0_tokenizer,
                                           t0_model=t0_model, augment=args.augment, use_caption=args.use_caption)
     else:
+        print('vqa retrieval')
         eval_results = vqa_retrieval(model_vqa, model, test_loader, config['k_test'],
                                      separate=args.separate, augment=args.augment, num_segment=args.num_segment,
                                      ask_object=args.ask_object, ask_regular=args.ask_regular, aggregate=args.aggregate)
+
     print(eval_results)
     log_stats = {**{f'{k}': v for k, v in eval_results.items()}, }
 
@@ -102,6 +106,7 @@ if __name__ == '__main__':
     parser.add_argument('--round', default=1, type=int)
     parser.add_argument('--top_k', default=4, type=int)
 
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = "expandable_segments:True" # to prevent from memory segmentation when loading models
     args = parser.parse_args()
     config = yaml.load(open(args.retrieval_config, 'r'), Loader=yaml.Loader)
     config_vqa = yaml.load(open(args.vqa_config, 'r'), Loader=yaml.Loader)

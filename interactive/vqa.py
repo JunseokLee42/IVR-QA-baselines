@@ -15,6 +15,7 @@ def vqa_retrieval(model_vqa, model_retrieval, data_loader, k_test, augment=False
     ranks_new = np.zeros(num_videos)
 
     for i in range(num_videos):
+        print(f"Video {i + 1}/{num_videos}")
         video_frame = videos[i].to(device,non_blocking=True)
         origin_caption = texts[i: i + 1][0]
         caption1 = generate_caption_vqa(video_frame, origin_caption, model_vqa)
